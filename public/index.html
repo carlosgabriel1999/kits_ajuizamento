@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kits Ajuizamento - Dashboard</title>
+  <!-- Google Fonts: Outfit (títulos) e Inter (textos) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome para ícones premium -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- Chart.js para os gráficos interativos -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Plugin de datalabels para Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <!-- Biblioteca html2canvas para exportar a dashboard em alta resolução -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+
+  <div class="app-container no-sidebar">
+    <!-- Sidebar Lateral -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <i class="fa-solid fa-folder-open logo-icon"></i>
+          <span>Kits Ajuizamento</span>
+        </div>
+        <button id="btn-toggle-sidebar" class="btn-toggle-sidebar" title="Minimizar Menu">
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <ul>
+          <li class="active" id="nav-dashboard">
+            <a href="#"><i class="fa-solid fa-chart-pie"></i><span>Dashboard</span></a>
+          </li>
+          <li id="nav-contracts">
+            <a href="#"><i class="fa-solid fa-file-invoice"></i><span>Contratos</span></a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button id="btn-trigger-upload" class="btn btn-upload-sidebar">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          <span>Atualizar Base</span>
+        </button>
+        <div class="version">v1.0.0</div>
+      </div>
+    </aside>
+
+    <!-- Overlay para fechar o menu no mobile ao clicar fora -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- Conteúdo Principal -->
+    <main class="main-content">
+      
+      <!-- Botão para abrir menu no mobile (ocultado em desktop) -->
+      <button id="btn-mobile-menu" class="btn-mobile-menu" title="Abrir Menu">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      
+      <!-- Cabeçalho Principal -->
+      <header class="main-header" style="display: none;">
+        <div class="header-title">
+          <h1 id="page-title">Dashboard Operacional</h1>
+          <p id="page-subtitle">Acompanhamento de ajuizamentos de contratos</p>
+        </div>
+        <div class="header-actions">
+          <button id="btn-export-dashboard" class="btn btn-primary" title="Exportar Dashboard para JPEG" style="display: none;">
+            <i class="fa-solid fa-file-image"></i>
+            <span>Exportar JPEG</span>
+          </button>
+          <div class="date-badge">
+            <i class="fa-regular fa-calendar"></i>
+            <span id="current-date">-- de -- de ----</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- SEÇÃO 1: TELA INICIAL (SEM DADOS CARREGADOS) -->
+      <section id="section-empty-state" class="content-section active">
+        <div class="welcome-container">
+          <div class="welcome-icon">
+            <i class="fa-solid fa-folder-tree"></i>
+          </div>
+          <h1>Acompanhamento dos Kits de Ajuizamento</h1>
+          <p>Para começar, realize o upload do arquivo Excel contendo as informações dos contratos operacionais (.xlsx).</p>
+          
+          <div class="upload-btn-container">
+            <input type="file" id="file-input" accept=".xlsx, .xls" hidden>
+            <button id="btn-browse-file" class="btn btn-primary btn-large">
+              <i class="fa-solid fa-file-excel"></i> Selecionar Arquivo Excel (.xlsx)
+            </button>
+            <span class="file-info" id="selected-file-name" style="display: none;">Nenhum arquivo selecionado</span>
+          </div>
+
+          <!-- Botão oculto acionado programaticamente pelo JS -->
+          <button id="btn-upload-submit" class="btn btn-primary btn-large" style="display: none;" disabled>
+            Processar Dados
+          </button>
+        </div>
+      </section>
+
+      <!-- SEÇÃO 2: DASHBOARD (COM DADOS CARREGADOS) -->
+      <section id="section-dashboard" class="content-section">
+        
+        <!-- KPIs Principais (Linha 1) -->
+        <div class="kpi-grid">
+          <div class="kpi-card card-total">
+            <div class="kpi-icon"><i class="fa-solid fa-database"></i></div>
+            <div class="kpi-details">
+              <span class="kpi-title">Total Ativos</span>
+              <h2 id="kpi-total">0</h2>
+              <span class="kpi-desc">Contratos em andamento</span>
+            </div>
+          </div>
+          
+          <div class="kpi-card card-completos">
+            <div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="kpi-details">
+              <span class="kpi-title">Kits Completos</span>
+              <h2 id="kpi-completos">0</h2>
+              <span class="kpi-desc">Prontos (KIT OK)</span>
+            </div>
+          </div>
+
+          <div class="kpi-card card-pendentes">
+            <div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div class="kpi-details">
+              <span class="kpi-title">Doc. Pendente</span>
+              <h2 id="kpi-pendentes">0</h2>
+              <span class="kpi-desc">Falta documento (PARCIAL)</span>
+            </div>
+          </div>
+
+          <div class="kpi-card card-ainiciar">
+            <div class="kpi-icon"><i class="fa-solid fa-hourglass-start"></i></div>
+            <div class="kpi-details">
+              <span class="kpi-title">A Iniciar</span>
+              <h2 id="kpi-ainiciar">0</h2>
+              <span class="kpi-desc">Processos a começar</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPIs Secundários e Porcentagens (Linha 2) -->
+        <div class="kpi-sub-grid">
+          <div class="kpi-sub-card">
+            <div class="kpi-sub-icon warning"><i class="fa-solid fa-circle-question"></i></div>
+            <div class="kpi-sub-details">
+              <span class="kpi-sub-title">Não Localizado</span>
+              <h3 id="kpi-naolocalizado">0</h3>
+            </div>
+          </div>
+
+          <div class="kpi-sub-card">
+            <div class="kpi-sub-icon danger"><i class="fa-solid fa-anchor"></i></div>
+            <div class="kpi-sub-details">
+              <span class="kpi-sub-title">Pendência Âncora</span>
+              <h3 id="kpi-ancora">0</h3>
+            </div>
+          </div>
+
+          <!-- Barra de Progresso Realizados -->
+          <div class="kpi-progress-card">
+            <div class="progress-info">
+              <span class="progress-title">% Realizados</span>
+              <span class="progress-val" id="progress-val-realizados">0%</span>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar progress-realizados" id="bar-realizados" style="width: 0%"></div>
+            </div>
+            <span class="progress-desc">Contratos iniciados/processados</span>
+          </div>
+
+          <!-- Barra de Progresso A Iniciar -->
+          <div class="kpi-progress-card">
+            <div class="progress-info">
+              <span class="progress-title">% A Iniciar</span>
+              <span class="progress-val" id="progress-val-ainiciar">0%</span>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar progress-ainiciar" id="bar-ainiciar" style="width: 0%"></div>
+            </div>
+            <span class="progress-desc">Falta dar início operacional</span>
+          </div>
+        </div>
+
+        <!-- Gráficos (Linha 3) -->
+        <div class="charts-grid">
+          <!-- Gráfico de Status por Situação de Cobrança -->
+          <div class="chart-card large-chart">
+            <div class="chart-header">
+              <h3>Status X Situação de Cobrança</h3>
+              <p>Cruzamento de status operacionais por grupo de cobrança (CC3, M08, PJ4)</p>
+            </div>
+            <div class="chart-wrapper chart-wrapper-bar">
+              <canvas id="chart-status-sitcob"></canvas>
+            </div>
+          </div>
+
+          <!-- Gráfico de Volume de Cobrança -->
+          <div class="chart-card small-chart">
+            <div class="chart-header">
+              <h3>Distribuição de Cobrança</h3>
+              <p>Proporção de contratos por tipo de carteira</p>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="chart-qty-sitcob"></canvas>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- SEÇÃO 3: TABELA DE CONTRATOS (COM DADOS CARREGADOS) -->
+      <section id="section-contracts-list" class="content-section">
+        
+        <div class="table-card">
+          
+          <!-- Filtros e Busca -->
+          <div class="table-controls">
+            <!-- Busca Global -->
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="search-input" placeholder="Pesquisar por contrato, nome, CPF/CNPJ, grupo...">
+            </div>
+
+            <!-- Filtros Rápidos -->
+            <div class="filter-actions">
+              <div class="filter-select-wrapper">
+                <i class="fa-solid fa-filter icon-filter"></i>
+                <select id="filter-sitcob">
+                  <option value="">Todas Cobranças</option>
+                  <option value="CC3">CC3</option>
+                  <option value="M08">M08</option>
+                  <option value="PJ4">PJ4</option>
+                </select>
+              </div>
+
+              <div class="filter-select-wrapper">
+                <i class="fa-solid fa-circle-info icon-filter"></i>
+                <select id="filter-status">
+                  <option value="">Todos Status</option>
+                  <option value="A INICIAR">A Iniciar</option>
+                  <option value="DOCS PARCIAL">Doc. Pendente</option>
+                  <option value="KIT OK">Kit OK</option>
+                  <option value="NENHUM DOCUMENTO">Não Localizado</option>
+                  <option value="PENDÊNCIA ÂNCORA">Pendência Âncora</option>
+                  <option value="PAGO">Pago</option>
+                </select>
+              </div>
+
+              <button id="btn-clear-filters" class="btn btn-secondary" title="Limpar Filtros">
+                <i class="fa-solid fa-filter-circle-xmark"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Tabela de Dados -->
+          <div class="table-responsive">
+            <table class="contracts-table" id="contracts-table">
+              <thead>
+                <tr>
+                  <th data-sort="contrato" class="sortable">Contrato <i class="fa-solid fa-sort"></i></th>
+                  <th data-sort="grupo" class="sortable">Grupo/Cota <i class="fa-solid fa-sort"></i></th>
+                  <th data-sort="nome" class="sortable">Cliente <i class="fa-solid fa-sort"></i></th>
+                  <th data-sort="cpf_cnpj" class="sortable">CPF / CNPJ <i class="fa-solid fa-sort"></i></th>
+                  <th data-sort="sit_cob" class="sortable">Cobrança <i class="fa-solid fa-sort"></i></th>
+                  <th data-sort="situacao" class="sortable">Status <i class="fa-solid fa-sort"></i></th>
+                  <th>Observações</th>
+                </tr>
+              </thead>
+              <tbody id="contracts-table-body">
+                <!-- Linhas inseridas via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Paginação -->
+          <div class="table-pagination">
+            <div class="pagination-info">
+              Mostrando <span id="pag-start">0</span> a <span id="pag-end">0</span> de <span id="pag-total">0</span> contratos
+            </div>
+            <div class="pagination-buttons">
+              <button id="btn-prev-page" class="btn btn-pag"><i class="fa-solid fa-chevron-left"></i></button>
+              <div class="pagination-pages" id="pagination-pages">
+                <!-- Botões de página -->
+              </div>
+              <button id="btn-next-page" class="btn btn-pag"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL DE UPLOAD (ATUALIZAR BASE) -->
+  <div class="modal-overlay" id="upload-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Atualizar Base de Dados</h2>
+        <button class="modal-close" id="btn-close-modal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <p>Faça o upload de um novo arquivo Excel para atualizar os dados operacionais.</p>
+        
+        <div id="modal-dropzone" class="dropzone">
+          <input type="file" id="modal-file-input" accept=".xlsx, .xls" hidden>
+          <i class="fa-solid fa-cloud-arrow-up dropzone-icon"></i>
+          <h3>Arraste o arquivo aqui</h3>
+          <p>ou <span class="browse-link">procure no computador</span></p>
+          <span class="file-info" id="modal-selected-file-name">Nenhum arquivo selecionado</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-upload">Cancelar</button>
+        <button class="btn btn-primary" id="btn-modal-upload-submit" disabled>
+          <i class="fa-solid fa-bolt"></i> Atualizar Dados
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPINNER DE CARREGAMENTO -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="spinner-container">
+      <div class="spinner"></div>
+      <p id="loading-text">Processando dados do Excel...</p>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "kits-ajuizamento-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard de acompanhamento de ajuizamento de kits de contratos",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "private": true
+}
