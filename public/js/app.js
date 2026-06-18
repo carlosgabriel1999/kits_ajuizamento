@@ -435,13 +435,22 @@ function animarNumero(id, targetVal) {
   }, stepTime);
 }
 
-function renderizarGraficos() {
-  // Destruir gráficos anteriores se existirem
-  if (chartStatusSitCob) chartStatusSitCob.destroy();
-  if (chartQtySitCob) chartQtySitCob.destroy();
+function renderizarGraficos(canvasStatusEl = null, canvasQtyEl = null, renderOptions = {}) {
+  const targetCanvasStatus = canvasStatusEl || document.getElementById('chart-status-sitcob');
+  const targetCanvasQty = canvasQtyEl || document.getElementById('chart-qty-sitcob');
+
+  if (!targetCanvasStatus || !targetCanvasQty) return null;
+
+  const isDefault = (!canvasStatusEl && !canvasQtyEl);
+
+  // Destruir gráficos anteriores se existirem (apenas no modo default)
+  if (isDefault) {
+    if (chartStatusSitCob) chartStatusSitCob.destroy();
+    if (chartQtySitCob) chartQtySitCob.destroy();
+  }
 
   // 1. GRÁFICO 1: Status X Situação de Cobrança (Barras Empilhadas)
-  const ctxStatus = document.getElementById('chart-status-sitcob').getContext('2d');
+  const ctxStatus = targetCanvasStatus.getContext('2d');
 
   // Criar gradientes verticais para as barras (de cima para baixo)
   const gradAIniciar = ctxStatus.createLinearGradient(0, 0, 0, 300);
@@ -501,7 +510,7 @@ function renderizarGraficos() {
     }
   ];
 
-  chartStatusSitCob = new Chart(ctxStatus, {
+  const chartStatusConfig = {
     type: 'bar',
     data: {
       labels: categories,
@@ -561,10 +570,16 @@ function renderizarGraficos() {
         }
       }
     }
-  });
+  };
+
+  if (renderOptions.animation === false) {
+    chartStatusConfig.options.animation = false;
+  }
+
+  const createdChartStatus = new Chart(ctxStatus, chartStatusConfig);
 
   // 2. GRÁFICO 2: Volume por carteira de cobrança (Rosca/Donut) com percentuais
-  const ctxQty = document.getElementById('chart-qty-sitcob').getContext('2d');
+  const ctxQty = targetCanvasQty.getContext('2d');
   const qtyData = categories.map(cat => appData.qty_by_sit_cob[cat]);
   const totalGeral = qtyData.reduce((acc, v) => acc + v, 0);
 
@@ -581,7 +596,7 @@ function renderizarGraficos() {
   gradPJ4.addColorStop(0, '#0C0D21');
   gradPJ4.addColorStop(1, '#2E3159');
 
-  chartQtySitCob = new Chart(ctxQty, {
+  const chartQtyConfig = {
     type: 'doughnut',
     data: {
       labels: categories,
@@ -638,7 +653,20 @@ function renderizarGraficos() {
         }
       }
     }
-  });
+  };
+
+  if (renderOptions.animation === false) {
+    chartQtyConfig.options.animation = false;
+  }
+
+  const createdChartQty = new Chart(ctxQty, chartQtyConfig);
+
+  if (isDefault) {
+    chartStatusSitCob = createdChartStatus;
+    chartQtySitCob = createdChartQty;
+  }
+
+  return { chartStatus: createdChartStatus, chartQty: createdChartQty };
 }
 
 
@@ -884,11 +912,19 @@ function setupExportEvents() {
 }
 
 async function exportarDashboardParaJPEG() {
+  // Garantir que todas as fontes (Google Fonts) estejam carregadas no navegador antes da renderização
+  if (document.fonts && document.fonts.ready) {
+    await document.fonts.ready;
+  }
+
   // 1. Mostrar loading overlay
-  mostrarLoading("Exportando dashboard para imagem de alta resolução...");
+  mostrarLoading("Exportando dashboard para imagem horizontal de alta qualidade...");
 
   // Aguardar um instante para garantir que a tela renderize o loading overlay
   await new Promise(resolve => setTimeout(resolve, 150));
+
+  let exportCharts = null;
+  let exportWrapper = null;
 
   try {
     // 2. Elementos a clonar
@@ -920,74 +956,136 @@ async function exportarDashboardParaJPEG() {
       exportBtnInClone.remove();
     }
 
-    // 5. Substituir os canvases nos elementos clonados por imagens estáticas correspondentes
-    const originalCanvases = dashboardElement.querySelectorAll('canvas');
-    const clonedCanvases = dashboardClone.querySelectorAll('canvas');
-    
-    for (let i = 0; i < originalCanvases.length; i++) {
-      const originalCanvas = originalCanvases[i];
-      const clonedCanvas = clonedCanvases[i];
-      if (clonedCanvas && originalCanvas) {
-        // Criar elemento de imagem para substituir o canvas no clone
-        const img = document.createElement('img');
-        img.src = originalCanvas.toDataURL('image/png');
-        
-        // Copiar as dimensões e garantir que a imagem se ajuste de forma fluida e sem distorcer
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.display = 'block';
-        img.style.objectFit = 'contain';
-        
-        // Substituir o canvas pelo elemento de imagem
-        clonedCanvas.parentNode.replaceChild(img, clonedCanvas);
-      }
-    }
-
-    // 6. Criar um container temporário fora da tela
-    const exportWrapper = document.createElement('div');
+    // 5. Criar um container temporário fora da tela
+    exportWrapper = document.createElement('div');
     exportWrapper.id = 'temp-export-wrapper';
     
-    // Aplicar estilos para que o clone se comporte como na visualização desktop de 1300px
+    // Aplicar estilos básicos para posicionamento fora da tela
     exportWrapper.style.position = 'absolute';
     exportWrapper.style.left = '-9999px';
     exportWrapper.style.top = '0';
-    exportWrapper.style.width = '1300px'; // Largura ideal para gráficos e grid ficarem lado a lado
-    exportWrapper.style.padding = '40px';
-    exportWrapper.style.backgroundColor = '#F2F2F2'; // Mesma cor de fundo do main-content
-    exportWrapper.style.display = 'flex';
-    exportWrapper.style.flexDirection = 'column';
-    exportWrapper.style.gap = '32px';
-    exportWrapper.style.boxSizing = 'border-box';
     exportWrapper.style.fontFamily = "var(--font-body), sans-serif";
+    
+    // 6. Injetar folha de estilo específica para forçar o layout horizontal e consistência tipográfica Mac/Windows
+    const styleEl = document.createElement('style');
+    styleEl.innerHTML = `
+      #temp-export-wrapper {
+        width: 1600px !important;
+        height: auto !important;
+        min-height: 900px !important;
+        padding: 30px !important;
+        background-color: #F2F2F2 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 20px !important;
+        box-sizing: border-box !important;
+      }
+      #temp-export-wrapper * {
+        font-family: var(--font-body), sans-serif !important;
+        box-sizing: border-box !important;
+      }
+      #temp-export-wrapper h1,
+      #temp-export-wrapper h2,
+      #temp-export-wrapper h3,
+      #temp-export-wrapper h4,
+      #temp-export-wrapper h5,
+      #temp-export-wrapper h6 {
+        font-family: var(--font-title), sans-serif !important;
+      }
+      #temp-export-wrapper .main-header {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      #temp-export-wrapper #section-dashboard {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 20px !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      #temp-export-wrapper .kpi-grid {
+        display: grid !important;
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: 16px !important;
+        width: 100% !important;
+      }
+      #temp-export-wrapper .kpi-sub-grid {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr 1.5fr 1.5fr !important;
+        gap: 16px !important;
+        width: 100% !important;
+      }
+      #temp-export-wrapper .charts-grid {
+        display: grid !important;
+        grid-template-columns: 2fr 1fr !important;
+        gap: 20px !important;
+        width: 100% !important;
+        align-items: stretch !important;
+      }
+      #temp-export-wrapper .chart-card {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+        height: 100% !important;
+        padding: 20px !important;
+        box-sizing: border-box !important;
+      }
+      #temp-export-wrapper .chart-wrapper-bar,
+      #temp-export-wrapper .chart-wrapper {
+        min-height: 550px !important;
+        height: 550px !important;
+        max-height: 550px !important;
+        width: 100% !important;
+        position: relative !important;
+      }
+    `;
+    exportWrapper.appendChild(styleEl);
     
     // Anexar os clones ao container
     exportWrapper.appendChild(headerClone);
     exportWrapper.appendChild(dashboardClone);
     
-    // Adicionar o container temporário ao body para que o CSS global seja aplicado
+    // Adicionar o container temporário ao body para que o CSS global e a folha de estilo interna sejam aplicados
     document.body.appendChild(exportWrapper);
 
-    // Pequeno delay para garantir que o navegador processe a inclusão no DOM antes do html2canvas
-    await new Promise(resolve => setTimeout(resolve, 250));
+    // 7. Obter referências dos canvases clonados e inicializar gráficos neles sem animação
+    const clonedCanvasStatus = dashboardClone.querySelector('#chart-status-sitcob');
+    const clonedCanvasQty = dashboardClone.querySelector('#chart-qty-sitcob');
+    
+    if (clonedCanvasStatus && clonedCanvasQty) {
+      exportCharts = renderizarGraficos(clonedCanvasStatus, clonedCanvasQty, { animation: false });
+    }
 
-    // 7. Chamar o html2canvas com configurações de alta resolução
+    // Pequeno delay para garantir que o navegador processe e desenhe os gráficos nos canvases
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    // 8. Chamar o html2canvas com configurações de alta resolução e dimensões fixas horizontais
     const canvas = await html2canvas(exportWrapper, {
       scale: 3,                   // Triplica a densidade de pixels para alta resolução (HD)
       useCORS: true,              // Permite carregar recursos com CORS
       logging: false,             // Desliga logs desnecessários no console
       backgroundColor: '#F2F2F2',  // Cor do fundo do JPEG para evitar fundo preto ou transparente
-      windowWidth: 1300,          // Força a largura de renderização simulada
-      windowHeight: exportWrapper.scrollHeight
+      windowWidth: 1600,          // Força a largura de renderização simulada
+      windowHeight: exportWrapper.scrollHeight, // Força a altura dinâmica calculada do wrapper
+      scrollX: 0,                 // Previne bugs de rolagem da página na imagem no Windows (deslocamento)
+      scrollY: 0,
+      x: 0,
+      y: 0
     });
 
-    // 8. Converter o canvas para JPEG com 95% de qualidade
+    // 9. Converter o canvas para JPEG com 95% de qualidade
     const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
 
-    // 9. Gerar o nome do arquivo com a data atual (YYYY-MM-DD)
+    // 10. Gerar o nome do arquivo com a data atual (YYYY-MM-DD)
     const dataAtual = new Date().toISOString().split('T')[0];
     const fileName = `dashboard_ajuizamento_${dataAtual}.jpg`;
 
-    // 10. Criar elemento de link temporário e simular o clique para download
+    // 11. Criar elemento de link temporário e simular o clique para download
     const downloadLink = document.createElement('a');
     downloadLink.href = dataUrl;
     downloadLink.download = fileName;
@@ -995,14 +1093,20 @@ async function exportarDashboardParaJPEG() {
     downloadLink.click();
     document.body.removeChild(downloadLink);
 
-    // 11. Limpar o container temporário do DOM
-    document.body.removeChild(exportWrapper);
-
   } catch (error) {
     console.error("Erro ao exportar dashboard:", error);
     alert("Ocorreu um erro ao gerar a imagem JPEG do dashboard: " + error.message);
   } finally {
-    // 12. Ocultar o spinner de carregamento
+    // 12. Limpar instâncias temporárias de gráficos para evitar vazamento de memória
+    if (exportCharts) {
+      if (exportCharts.chartStatus) exportCharts.chartStatus.destroy();
+      if (exportCharts.chartQty) exportCharts.chartQty.destroy();
+    }
+    // 13. Limpar o container temporário do DOM
+    if (exportWrapper && exportWrapper.parentNode) {
+      document.body.removeChild(exportWrapper);
+    }
+    // 14. Ocultar o spinner de carregamento
     esconderLoading();
   }
 }

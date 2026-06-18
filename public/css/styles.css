@@ -654,7 +654,7 @@ h1, h2, h3, h4, h5, h6 {
 .chart-wrapper {
   position: relative;
   flex: 1;
-  min-height: 380px;
+  min-height: 550px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -666,7 +666,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Gráfico de barras precisa de mais altura para acomodar todas as faixas com legibilidade */
 .chart-wrapper-bar {
-  min-height: 700px;
+  min-height: 550px;
 }
 
 /* SEÇÃO 3: TABELA DE CONTRATOS */
